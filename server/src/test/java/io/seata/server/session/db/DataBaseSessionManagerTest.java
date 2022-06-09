@@ -15,23 +15,6 @@
  */
 package io.seata.server.session.db;
 
-import io.seata.common.XID;
-import io.seata.core.exception.TransactionException;
-import io.seata.core.model.BranchStatus;
-import io.seata.core.model.BranchType;
-import io.seata.core.model.GlobalStatus;
-import io.seata.core.store.db.LogStoreDataBaseDAO;
-import io.seata.server.UUIDGenerator;
-import io.seata.server.session.BranchSession;
-import io.seata.server.session.GlobalSession;
-import io.seata.server.session.SessionCondition;
-import io.seata.server.session.SessionManager;
-import io.seata.server.store.db.DatabaseTransactionStoreManager;
-import org.apache.commons.dbcp.BasicDataSource;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Assertions;
-
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -39,12 +22,36 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import io.seata.common.XID;
+import io.seata.common.util.IOUtil;
+import io.seata.core.exception.TransactionException;
+import io.seata.core.model.BranchStatus;
+import io.seata.core.model.BranchType;
+import io.seata.core.model.GlobalStatus;
+import io.seata.server.UUIDGenerator;
+import io.seata.server.session.BranchSession;
+import io.seata.server.session.GlobalSession;
+import io.seata.server.session.SessionCondition;
+import io.seata.server.session.SessionManager;
+import io.seata.server.storage.db.session.DataBaseSessionManager;
+import io.seata.server.storage.db.store.DataBaseTransactionStoreManager;
+import io.seata.server.storage.db.store.LogStoreDataBaseDAO;
+import org.apache.commons.dbcp2.BasicDataSource;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
+
+import static io.seata.common.DefaultValues.DEFAULT_TX_GROUP;
+
 /**
  * The type Data base session manager test.
  *
  * @author zhangsen
- * @data 2019 /4/28
  */
+@SpringBootTest
 public class DataBaseSessionManagerTest {
 
     static SessionManager sessionManager = null;
@@ -54,9 +61,9 @@ public class DataBaseSessionManagerTest {
     static BasicDataSource dataSource = null;
 
     @BeforeAll
-    public static void start() throws Exception {
+    public static void start(ApplicationContext context) throws Exception {
         DataBaseSessionManager tempSessionManager = new DataBaseSessionManager();
-        DatabaseTransactionStoreManager transactionStoreManager = new DatabaseTransactionStoreManager();
+        DataBaseTransactionStoreManager transactionStoreManager = DataBaseTransactionStoreManager.getInstance();
 
         dataSource =  new BasicDataSource();
         dataSource.setDriverClassName("org.h2.Driver");
@@ -67,7 +74,7 @@ public class DataBaseSessionManagerTest {
         logStoreDataBaseDAO = new LogStoreDataBaseDAO(dataSource);
         logStoreDataBaseDAO.setDbType("h2");
         logStoreDataBaseDAO.setGlobalTable("global_table");
-        logStoreDataBaseDAO.setBrachTable("branch_table");
+        logStoreDataBaseDAO.setBranchTable("branch_table");
 
         transactionStoreManager.setLogQueryLimit(100);
         transactionStoreManager.setLogStore(logStoreDataBaseDAO);
@@ -76,6 +83,8 @@ public class DataBaseSessionManagerTest {
         sessionManager = tempSessionManager;
 
         prepareTable(dataSource);
+
+        logStoreDataBaseDAO.initTransactionNameSize();
     }
 
     private static void prepareTable(BasicDataSource dataSource) {
@@ -87,7 +96,7 @@ public class DataBaseSessionManagerTest {
                 s.execute("drop table global_table");
             } catch (Exception e) {
             }
-            s.execute("CREATE TABLE global_table ( xid varchar(96),  transaction_id long , STATUS int,  application_id varchar(32), transaction_service_group varchar(32) ,transaction_name varchar(32) ,timeout int,  begin_time long, application_data varchar(500), gmt_create TIMESTAMP(6) ,gmt_modified TIMESTAMP(6) ) ");
+            s.execute("CREATE TABLE global_table ( xid varchar(96),  transaction_id long , STATUS int,  application_id varchar(32), transaction_service_group varchar(32) ,transaction_name varchar(128) ,timeout int,  begin_time long, application_data varchar(500), gmt_create TIMESTAMP(6) ,gmt_modified TIMESTAMP(6) ) ");
             System.out.println("create table global_table success.");
 
             try {
@@ -100,13 +109,7 @@ public class DataBaseSessionManagerTest {
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
+            IOUtil.close(conn);
         }
     }
 
@@ -114,7 +117,7 @@ public class DataBaseSessionManagerTest {
     @Test
     public void test_addGlobalSession() throws TransactionException, SQLException {
         GlobalSession session = GlobalSession.createGlobalSession("test",
-                "test", "test123", 100);
+            "test", "test123", 100);
         String xid = XID.generateXID(session.getTransactionId());
         session.setXid(xid);
         session.setTransactionId(146757978);
@@ -148,7 +151,7 @@ public class DataBaseSessionManagerTest {
     @Test
     public void test_updateGlobalSessionStatus() throws TransactionException, SQLException {
         GlobalSession session = GlobalSession.createGlobalSession("test",
-                "test", "test123", 100);
+            "test", "test123", 100);
         String xid = XID.generateXID(session.getTransactionId());
         session.setXid(xid);
         session.setTransactionId(146757978);
@@ -185,7 +188,7 @@ public class DataBaseSessionManagerTest {
     @Test
     public void test_removeGlobalSession() throws Exception {
         GlobalSession session = GlobalSession.createGlobalSession("test",
-                "test", "test123", 100);
+            "test", "test123", 100);
         String xid = XID.generateXID(session.getTransactionId());
         session.setXid(xid);
         session.setTransactionId(146757978);
@@ -230,7 +233,7 @@ public class DataBaseSessionManagerTest {
     @Test
     public void test_findGlobalSession() throws Exception {
         GlobalSession session = GlobalSession.createGlobalSession("test",
-                "test", "test123", 100);
+            "test", "test123", 100);
         String xid = XID.generateXID(session.getTransactionId());
         session.setXid(xid);
         session.setTransactionId(146757978);
@@ -269,7 +272,7 @@ public class DataBaseSessionManagerTest {
     @Test
     public void test_addBranchSession() throws Exception {
         GlobalSession globalSession = GlobalSession.createGlobalSession("test",
-                "test", "test123", 100);
+            "test", "test123", 100);
         String xid = XID.generateXID(globalSession.getTransactionId());
         globalSession.setXid(xid);
         globalSession.setTransactionId(146757978);
@@ -282,7 +285,7 @@ public class DataBaseSessionManagerTest {
         branchSession.setXid(xid);
         branchSession.setTransactionId(globalSession.getTransactionId());
         branchSession.setBranchId(1L);
-        branchSession.setResourceGroupId("my_test_tx_group");
+        branchSession.setResourceGroupId(DEFAULT_TX_GROUP);
         branchSession.setResourceId("tb_1");
         branchSession.setLockKey("t_1");
         branchSession.setBranchType(BranchType.AT);
@@ -314,7 +317,7 @@ public class DataBaseSessionManagerTest {
     @Test
     public void test_updateBranchSessionStatus() throws Exception {
         GlobalSession globalSession = GlobalSession.createGlobalSession("test",
-                "test", "test123", 100);
+            "test", "test123", 100);
         String xid = XID.generateXID(globalSession.getTransactionId());
         globalSession.setXid(xid);
         globalSession.setTransactionId(146757978);
@@ -327,7 +330,7 @@ public class DataBaseSessionManagerTest {
         branchSession.setXid(xid);
         branchSession.setTransactionId(globalSession.getTransactionId());
         branchSession.setBranchId(1L);
-        branchSession.setResourceGroupId("my_test_tx_group");
+        branchSession.setResourceGroupId(DEFAULT_TX_GROUP);
         branchSession.setResourceId("tb_1");
         branchSession.setLockKey("t_1");
         branchSession.setBranchType(BranchType.AT);
@@ -363,7 +366,7 @@ public class DataBaseSessionManagerTest {
     @Test
     public void test_removeBranchSession() throws Exception {
         GlobalSession globalSession = GlobalSession.createGlobalSession("test",
-                "test", "test123", 100);
+            "test", "test123", 100);
         String xid = XID.generateXID(globalSession.getTransactionId());
         globalSession.setXid(xid);
         globalSession.setTransactionId(146757978);
@@ -376,7 +379,7 @@ public class DataBaseSessionManagerTest {
         branchSession.setXid(xid);
         branchSession.setTransactionId(globalSession.getTransactionId());
         branchSession.setBranchId(1L);
-        branchSession.setResourceGroupId("my_test_tx_group");
+        branchSession.setResourceGroupId(DEFAULT_TX_GROUP);
         branchSession.setResourceId("tb_1");
         branchSession.setLockKey("t_1");
         branchSession.setBranchType(BranchType.AT);
@@ -411,7 +414,7 @@ public class DataBaseSessionManagerTest {
     @Test
     public void test_allSessions() throws Exception {
         GlobalSession globalSession = GlobalSession.createGlobalSession("test",
-                "test", "test123", 100);
+            "test", "test123", 100);
         String xid = XID.generateXID(globalSession.getTransactionId());
         globalSession.setXid(xid);
         globalSession.setTransactionId(146757978);
@@ -426,7 +429,7 @@ public class DataBaseSessionManagerTest {
         branchSession.setXid(xid);
         branchSession.setTransactionId(globalSession.getTransactionId());
         branchSession.setBranchId(1L);
-        branchSession.setResourceGroupId("my_test_tx_group");
+        branchSession.setResourceGroupId(DEFAULT_TX_GROUP);
         branchSession.setResourceId("tb_1");
         branchSession.setLockKey("t_1");
         branchSession.setBranchType(BranchType.AT);
@@ -442,7 +445,7 @@ public class DataBaseSessionManagerTest {
         branchSession2.setXid(xid);
         branchSession2.setTransactionId(globalSession.getTransactionId());
         branchSession2.setBranchId(2L);
-        branchSession2.setResourceGroupId("my_test_tx_group");
+        branchSession2.setResourceGroupId(DEFAULT_TX_GROUP);
         branchSession2.setResourceId("tb_1");
         branchSession2.setLockKey("t_1");
         branchSession2.setBranchType(BranchType.TCC);
@@ -456,7 +459,7 @@ public class DataBaseSessionManagerTest {
         Assertions.assertNotNull(rets);
         Assertions.assertEquals(1, rets.size());
 
-        GlobalSession globalSession_db = (io.seata.server.session.GlobalSession) new ArrayList(rets).get(0);
+        GlobalSession globalSession_db = (GlobalSession) new ArrayList(rets).get(0);
 
         Assertions.assertNotNull(globalSession_db.getReverseSortedBranches());
         Assertions.assertEquals(2, globalSession_db.getReverseSortedBranches().size());
@@ -481,7 +484,7 @@ public class DataBaseSessionManagerTest {
         String xid = null;
         {
             GlobalSession globalSession = GlobalSession.createGlobalSession("test",
-                    "test", "test123", 100);
+                "test", "test123", 100);
             xid = XID.generateXID(globalSession.getTransactionId());
             globalSession.setXid(xid);
             globalSession.setTransactionId(146757978);
@@ -496,7 +499,7 @@ public class DataBaseSessionManagerTest {
             branchSession.setXid(xid);
             branchSession.setTransactionId(globalSession.getTransactionId());
             branchSession.setBranchId(1L);
-            branchSession.setResourceGroupId("my_test_tx_group");
+            branchSession.setResourceGroupId(DEFAULT_TX_GROUP);
             branchSession.setResourceId("tb_1");
             branchSession.setLockKey("t_1");
             branchSession.setBranchType(BranchType.AT);
@@ -508,7 +511,7 @@ public class DataBaseSessionManagerTest {
         String xid2 = null;
         {
             GlobalSession globalSession = GlobalSession.createGlobalSession("test",
-                    "test", "test123", 100);
+                "test", "test123", 100);
             xid2 = XID.generateXID(globalSession.getTransactionId());
             globalSession.setXid(xid);
             globalSession.setTransactionId(146757978);
@@ -523,7 +526,7 @@ public class DataBaseSessionManagerTest {
             branchSession.setXid(xid2);
             branchSession.setTransactionId(globalSession.getTransactionId());
             branchSession.setBranchId(1L);
-            branchSession.setResourceGroupId("my_test_tx_group");
+            branchSession.setResourceGroupId(DEFAULT_TX_GROUP);
             branchSession.setResourceId("tb_1");
             branchSession.setLockKey("t_1");
             branchSession.setBranchType(BranchType.AT);
@@ -538,7 +541,7 @@ public class DataBaseSessionManagerTest {
         Assertions.assertNotNull(rets);
         Assertions.assertEquals(1, rets.size());
 
-        GlobalSession globalSession_db = (io.seata.server.session.GlobalSession) new ArrayList(rets).get(0);
+        GlobalSession globalSession_db = (GlobalSession) new ArrayList(rets).get(0);
 
         Assertions.assertNotNull(globalSession_db.getReverseSortedBranches());
         Assertions.assertEquals(1, globalSession_db.getReverseSortedBranches().size());
@@ -559,7 +562,48 @@ public class DataBaseSessionManagerTest {
         }
     }
 
+    @Test
+    public void test_transactionNameGreaterDbSize() throws Exception {
 
+        int transactionNameColumnSize = logStoreDataBaseDAO.getTransactionNameColumnSize();
+        StringBuilder sb = new StringBuilder("test");
+        for (int i = 4; i < transactionNameColumnSize; i++) {
+            sb.append("0");
+        }
+        final String finalTxName = sb.toString();
+        sb.append("1321465454545436");
 
+        GlobalSession session = GlobalSession.createGlobalSession("test",
+            "test", sb.toString(), 100);
+        String xid = XID.generateXID(session.getTransactionId());
+        session.setXid(xid);
+        session.setTransactionId(146757978);
+        session.setBeginTime(System.currentTimeMillis());
+        session.setApplicationData("abc=878s");
+        session.setStatus(GlobalStatus.Begin);
+
+        sessionManager.addGlobalSession(session);
+
+        GlobalSession globalSession_db = sessionManager.findGlobalSession(session.getXid());
+        Assertions.assertNotNull(globalSession_db);
+
+        Assertions.assertEquals(globalSession_db.getTransactionName(), finalTxName);
+
+        String delSql = "delete from global_table where xid= '"+xid+"'";
+        Connection conn = null;
+        try{
+            conn = dataSource.getConnection();
+            conn.createStatement().execute(delSql);
+        }finally {
+            if(conn != null){
+                conn.close();
+            }
+        }
+    }
+
+    @AfterAll
+    public static void setDown() throws SQLException {
+        dataSource.close();
+    }
 
 }

@@ -21,15 +21,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.StringJoiner;
 
-import com.alibaba.druid.util.JdbcConstants;
+import io.seata.common.util.StringUtils;
+import io.seata.rm.datasource.ColumnUtils;
 import io.seata.rm.datasource.StatementProxy;
-import io.seata.rm.datasource.sql.SQLDeleteRecognizer;
-import io.seata.rm.datasource.sql.SQLRecognizer;
 import io.seata.rm.datasource.sql.struct.TableMeta;
 import io.seata.rm.datasource.sql.struct.TableRecords;
-import io.seata.rm.datasource.undo.KeywordChecker;
-import io.seata.rm.datasource.undo.KeywordCheckerFactory;
-import org.apache.commons.lang.StringUtils;
+import io.seata.sqlparser.SQLDeleteRecognizer;
+import io.seata.sqlparser.SQLRecognizer;
 
 /**
  * The type Delete executor.
@@ -48,7 +46,7 @@ public class DeleteExecutor<T, S extends Statement> extends AbstractDMLBaseExecu
      * @param statementCallback the statement callback
      * @param sqlRecognizer     the sql recognizer
      */
-    public DeleteExecutor(StatementProxy statementProxy, StatementCallback statementCallback,
+    public DeleteExecutor(StatementProxy<S> statementProxy, StatementCallback<T, S> statementCallback,
                           SQLRecognizer sqlRecognizer) {
         super(statementProxy, statementCallback, sqlRecognizer);
     }
@@ -63,16 +61,23 @@ public class DeleteExecutor<T, S extends Statement> extends AbstractDMLBaseExecu
     }
 
     private String buildBeforeImageSQL(SQLDeleteRecognizer visitor, TableMeta tableMeta, ArrayList<List<Object>> paramAppenderList) {
-        KeywordChecker keywordChecker = KeywordCheckerFactory.getKeywordChecker(JdbcConstants.MYSQL);
         String whereCondition = buildWhereCondition(visitor, paramAppenderList);
-        StringBuilder suffix = new StringBuilder(" FROM " + keywordChecker.checkAndReplace(getFromTableInSQL()));
+        String orderByCondition = buildOrderCondition(visitor, paramAppenderList);
+        String limitCondition = buildLimitCondition(visitor, paramAppenderList);
+        StringBuilder suffix = new StringBuilder(" FROM ").append(getFromTableInSQL());
         if (StringUtils.isNotBlank(whereCondition)) {
-            suffix.append(" WHERE " + whereCondition);
+            suffix.append(WHERE).append(whereCondition);
+        }
+        if (StringUtils.isNotBlank(orderByCondition)) {
+            suffix.append(" ").append(orderByCondition);
+        }
+        if (StringUtils.isNotBlank(limitCondition)) {
+            suffix.append(" ").append(limitCondition);
         }
         suffix.append(" FOR UPDATE");
         StringJoiner selectSQLAppender = new StringJoiner(", ", "SELECT ", suffix.toString());
         for (String column : tableMeta.getAllColumns().keySet()) {
-            selectSQLAppender.add(getColumnNameInSQL(keywordChecker.checkAndReplace(column)));
+            selectSQLAppender.add(getColumnNameInSQL(ColumnUtils.addEscape(column, getDbType())));
         }
         return selectSQLAppender.toString();
     }

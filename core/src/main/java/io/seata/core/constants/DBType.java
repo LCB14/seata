@@ -21,7 +21,6 @@ import io.seata.common.util.StringUtils;
  * database type
  *
  * @author zhangsen
- * @date 2019 /4/2
  */
 public enum DBType {
 
@@ -73,7 +72,12 @@ public enum DBType {
     /**
      * Oceanbase db type.
      */
-    OCEANBASE;
+    OCEANBASE,
+
+    /**
+     * Maria db type.
+     */
+    MARIADB;
 
     /**
      * Valueof db type.

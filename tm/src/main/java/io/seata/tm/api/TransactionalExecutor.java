@@ -34,7 +34,7 @@ public interface TransactionalExecutor {
 
     /**
      * transaction conf or other attr
-     * @return
+     * @return transaction info
      */
     TransactionInfo getTransactionInfo();
 
@@ -66,7 +66,19 @@ public interface TransactionalExecutor {
          * Rollback done code.
          */
         //
-        RollbackDone
+        RollbackDone,
+
+        /**
+         * Report failure code.
+         */
+        //
+        ReportFailure,
+
+        /**
+         * Rollback retrying code.
+         */
+        //
+        RollbackRetrying
     }
 
     /**

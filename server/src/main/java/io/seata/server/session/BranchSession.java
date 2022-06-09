@@ -17,19 +17,23 @@ package io.seata.server.session;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
+import java.util.concurrent.ConcurrentMap;
 import io.seata.common.util.CompressUtil;
 import io.seata.core.exception.TransactionException;
 import io.seata.core.model.BranchStatus;
 import io.seata.core.model.BranchType;
-import io.seata.server.lock.LockerFactory;
+import io.seata.core.model.LockStatus;
+import io.seata.server.lock.LockerManagerFactory;
+import io.seata.server.storage.file.lock.FileLocker;
 import io.seata.server.store.SessionStorable;
 import io.seata.server.store.StoreConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+
+import static io.seata.core.model.LockStatus.Locked;
 
 /**
  * The type Branch session.
@@ -65,7 +69,9 @@ public class BranchSession implements Lockable, Comparable<BranchSession>, Sessi
 
     private String applicationData;
 
-    private ConcurrentHashMap<Map<String, Long>, Set<String>> lockHolder
+    private LockStatus lockStatus = Locked;
+
+    private ConcurrentMap<FileLocker.BucketLockMap, Set<String>> lockHolder
         = new ConcurrentHashMap<>();
 
     /**
@@ -255,7 +261,11 @@ public class BranchSession implements Lockable, Comparable<BranchSession>, Sessi
 
     @Override
     public int compareTo(BranchSession o) {
-        return this.branchId < o.branchId ? -1 : (this.branchId > o.branchId ? 1 : 0);
+        return Long.compare(this.branchId, o.branchId);
+    }
+
+    public boolean canBeCommittedAsync() {
+        return branchType == BranchType.AT || status == BranchStatus.PhaseOne_Failed;
     }
 
     /**
@@ -263,18 +273,36 @@ public class BranchSession implements Lockable, Comparable<BranchSession>, Sessi
      *
      * @return the lock holder
      */
-    public ConcurrentHashMap<Map<String, Long>, Set<String>> getLockHolder() {
+    public ConcurrentMap<FileLocker.BucketLockMap, Set<String>> getLockHolder() {
         return lockHolder;
     }
 
     @Override
     public boolean lock() throws TransactionException {
-        return LockerFactory.getLockManager().acquireLock(this);
+        return this.lock(true, false);
+    }
+
+    public boolean lock(boolean autoCommit, boolean skipCheckLock) throws TransactionException {
+        if (this.getBranchType().equals(BranchType.AT)) {
+            return LockerManagerFactory.getLockManager().acquireLock(this, autoCommit, skipCheckLock);
+        }
+        return true;
     }
 
     @Override
     public boolean unlock() throws TransactionException {
-        return LockerFactory.getLockManager().releaseLock(this);
+        if (this.getBranchType() == BranchType.AT) {
+            return LockerManagerFactory.getLockManager().releaseLock(this);
+        }
+        return true;
+    }
+
+    public LockStatus getLockStatus() {
+        return lockStatus;
+    }
+
+    public void setLockStatus(LockStatus lockStatus) {
+        this.lockStatus = lockStatus;
     }
 
     @Override
@@ -323,28 +351,28 @@ public class BranchSession implements Lockable, Comparable<BranchSession>, Sessi
         byteBuffer.putLong(transactionId);
         byteBuffer.putLong(branchId);
 
-        if (null != resourceIdBytes) {
+        if (resourceIdBytes != null) {
             byteBuffer.putInt(resourceIdBytes.length);
             byteBuffer.put(resourceIdBytes);
         } else {
             byteBuffer.putInt(0);
         }
 
-        if (null != lockKeyBytes) {
+        if (lockKeyBytes != null) {
             byteBuffer.putInt(lockKeyBytes.length);
             byteBuffer.put(lockKeyBytes);
         } else {
             byteBuffer.putInt(0);
         }
 
-        if (null != clientIdBytes) {
+        if (clientIdBytes != null) {
             byteBuffer.putShort((short)clientIdBytes.length);
             byteBuffer.put(clientIdBytes);
         } else {
             byteBuffer.putShort((short)0);
         }
 
-        if (null != applicationDataBytes) {
+        if (applicationDataBytes != null) {
             byteBuffer.putInt(applicationDataBytes.length);
             byteBuffer.put(applicationDataBytes);
         } else {
@@ -361,6 +389,7 @@ public class BranchSession implements Lockable, Comparable<BranchSession>, Sessi
         byteBuffer.put(branchTypeByte);
 
         byteBuffer.put((byte)status.getCode());
+        byteBuffer.put((byte)lockStatus.getCode());
         byteBuffer.flip();
         byte[] result = new byte[byteBuffer.limit()];
         byteBuffer.get(result);
@@ -375,6 +404,7 @@ public class BranchSession implements Lockable, Comparable<BranchSession>, Sessi
             + 4 // lockKeyBytes.length
             + 2 // clientIdBytes.length
             + 4 // applicationDataBytes.length
+            + 4 // xidBytes.size
             + 1 // statusCode
             + (resourceIdBytes == null ? 0 : resourceIdBytes.length)
             + (lockKeyBytes == null ? 0 : lockKeyBytes.length)
@@ -434,7 +464,6 @@ public class BranchSession implements Lockable, Comparable<BranchSession>, Sessi
             this.branchType = BranchType.values()[branchTypeId];
         }
         this.status = BranchStatus.get(byteBuffer.get());
-
     }
 
 }

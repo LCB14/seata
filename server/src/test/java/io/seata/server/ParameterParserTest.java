@@ -19,13 +19,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
 
 /**
  * The type parameter parser test
  *
  * @author xingfudeshi@gmail.com
- * @date 2019/05/30
  */
+@SpringBootTest
 public class ParameterParserTest {
     private static ParameterParser parameterParser = null;
 
@@ -34,7 +35,7 @@ public class ParameterParserTest {
      */
     @BeforeEach
     private void init() {
-        String[] args = new String[] {"-h", "127.0.0.1", "-p", "8088", "-m", "file"};
+        String[] args = new String[] {"-h", "127.0.0.1", "-p", "8088", "-m", "file","-e","test"};
         parameterParser = new ParameterParser(args);
     }
 
@@ -44,6 +45,7 @@ public class ParameterParserTest {
     @Test
     public void testEmptyMode() {
         String[] args = new String[] {"-h", "127.0.0.1", "-p", "8088"};
+        parameterParser.cleanUp();
         parameterParser = new ParameterParser(args);
         //always set store.mode=file in test/resource/file.conf, if not will cause SessionStoreTest's case fail.
         Assertions.assertEquals("file", parameterParser.getStoreMode());
@@ -74,11 +76,22 @@ public class ParameterParserTest {
     }
 
     /**
+     * test get seata env
+     */
+    @Test
+    public void testGetSeataEnv() {
+        Assertions.assertEquals("test", parameterParser.getSeataEnv());
+    }
+
+    /**
      * clean up
      */
     @AfterEach
     public void cleanUp() {
-        parameterParser = null;
+        if (null != parameterParser) {
+            parameterParser.cleanUp();
+            parameterParser = null;
+        }
     }
 
 }

@@ -15,8 +15,6 @@
  */
 package io.seata.core.model;
 
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Status of global transaction.
@@ -119,9 +117,23 @@ public enum GlobalStatus {
      * The Finished.
      */
     // Not managed in session MAP any more
-    Finished(15);
+    Finished(15),
 
-    private int code;
+    /**
+     * The commit retry Timeout .
+     */
+    // Finally: failed to commit since retry timeout
+    CommitRetryTimeout(16),
+
+    /**
+     * The rollback retry Timeout .
+     */
+    // Finally: failed to rollback since retry timeout
+    RollbackRetryTimeout(17)
+
+    ;
+
+    private final int code;
 
     GlobalStatus(int code) {
         this.code = code;
@@ -138,15 +150,6 @@ public enum GlobalStatus {
     }
 
 
-
-    private static final Map<Integer, GlobalStatus> MAP = new HashMap<>(values().length);
-
-    static {
-        for (GlobalStatus status : values()) {
-            MAP.put(status.code, status);
-        }
-    }
-
     /**
      * Get global status.
      *
@@ -154,7 +157,7 @@ public enum GlobalStatus {
      * @return the global status
      */
     public static GlobalStatus get(byte code) {
-        return get((int)code);
+        return get((int) code);
     }
 
     /**
@@ -164,12 +167,12 @@ public enum GlobalStatus {
      * @return the global status
      */
     public static GlobalStatus get(int code) {
-        GlobalStatus status = MAP.get(code);
-
-        if (null == status) {
+        GlobalStatus value = null;
+        try {
+            value = GlobalStatus.values()[code];
+        } catch (Exception e) {
             throw new IllegalArgumentException("Unknown GlobalStatus[" + code + "]");
         }
-
-        return status;
+        return value;
     }
 }

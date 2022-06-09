@@ -15,8 +15,13 @@
  */
 package io.seata.server.lock;
 
+import java.util.List;
+
 import io.seata.core.exception.TransactionException;
+import io.seata.core.lock.RowLock;
+import io.seata.core.model.LockStatus;
 import io.seata.server.session.BranchSession;
+import io.seata.server.session.GlobalSession;
 
 /**
  * The interface Lock manager.
@@ -35,6 +40,17 @@ public interface LockManager {
     boolean acquireLock(BranchSession branchSession) throws TransactionException;
 
     /**
+     * Acquire lock boolean.
+     *
+     * @param branchSession the branch session
+     * @param autoCommit the auto commit
+     * @param skipCheckLock whether skip check lock or not
+     * @return the boolean
+     * @throws TransactionException the transaction exception
+     */
+    boolean acquireLock(BranchSession branchSession, boolean autoCommit, boolean skipCheckLock) throws TransactionException;
+
+    /**
      * Un lock boolean.
      *
      * @param branchSession the branch session
@@ -42,6 +58,15 @@ public interface LockManager {
      * @throws TransactionException the transaction exception
      */
     boolean releaseLock(BranchSession branchSession) throws TransactionException;
+
+    /**
+     * Un lock boolean.
+     *
+     * @param globalSession the global session
+     * @return the boolean
+     * @throws TransactionException the transaction exception
+     */
+    boolean releaseGlobalSessionLock(GlobalSession globalSession) throws TransactionException;
 
     /**
      * Is lockable boolean.
@@ -60,5 +85,22 @@ public interface LockManager {
      * @throws TransactionException the transaction exception
      */
     void cleanAllLocks() throws TransactionException;
+
+    /**
+     * Collect row locks list.`
+     *
+     * @param branchSession the branch session
+     * @return the list
+     */
+    List<RowLock> collectRowLocks(BranchSession branchSession);
+
+    /**
+     * update lock status.
+     * @param xid the xid
+     * @param lockStatus the lock status
+     * @throws TransactionException the transaction exception
+     *
+     */
+    void updateLockStatus(String xid, LockStatus lockStatus) throws TransactionException;
 
 }

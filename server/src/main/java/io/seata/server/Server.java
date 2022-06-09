@@ -15,77 +15,81 @@
  */
 package io.seata.server;
 
-import io.seata.common.XID;
-import io.seata.common.thread.NamedThreadFactory;
-import io.seata.common.util.NetUtil;
-import io.seata.core.constants.ConfigurationKeys;
-import io.seata.core.rpc.netty.RpcServer;
-import io.seata.core.rpc.netty.ShutdownHook;
-import io.seata.server.coordinator.DefaultCoordinator;
-import io.seata.server.metrics.MetricsManager;
-import io.seata.server.session.SessionHolder;
-
-import java.io.IOException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import io.seata.common.XID;
+import io.seata.common.thread.NamedThreadFactory;
+import io.seata.common.util.NetUtil;
+import io.seata.common.util.StringUtils;
+import io.seata.config.ConfigurationFactory;
+import io.seata.core.constants.ConfigurationKeys;
+import io.seata.core.rpc.netty.NettyRemotingServer;
+import io.seata.core.rpc.netty.NettyServerConfig;
+import io.seata.server.coordinator.DefaultCoordinator;
+import io.seata.server.lock.LockerManagerFactory;
+import io.seata.server.metrics.MetricsManager;
+import io.seata.server.session.SessionHolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static io.seata.spring.boot.autoconfigure.StarterConstants.REGEX_SPLIT_CHAR;
+import static io.seata.spring.boot.autoconfigure.StarterConstants.REGISTRY_PREFERED_NETWORKS;
+
 /**
  * The type Server.
  *
- * @author jimin.jm @alibaba-inc.com
+ * @author slievrly
  */
 public class Server {
-
-    private static final int MIN_SERVER_POOL_SIZE = 100;
-    private static final int MAX_SERVER_POOL_SIZE = 500;
-    private static final int MAX_TASK_QUEUE_SIZE = 20000;
-    private static final int KEEP_ALIVE_TIME = 500;
-    private static final ThreadPoolExecutor WORKING_THREADS = new ThreadPoolExecutor(MIN_SERVER_POOL_SIZE,
-        MAX_SERVER_POOL_SIZE, KEEP_ALIVE_TIME, TimeUnit.SECONDS,
-        new LinkedBlockingQueue<>(MAX_TASK_QUEUE_SIZE),
-        new NamedThreadFactory("ServerHandlerThread", MAX_SERVER_POOL_SIZE), new ThreadPoolExecutor.CallerRunsPolicy());
-
     /**
      * The entry point of application.
      *
      * @param args the input arguments
-     * @throws IOException the io exception
      */
-    public static void main(String[] args) throws IOException {
+    public static void start(String[] args) {
+        // create logger
+        final Logger logger = LoggerFactory.getLogger(Server.class);
+
+        //initialize the parameter parser
+        //Note that the parameter parser should always be the first line to execute.
+        //Because, here we need to parse the parameters needed for startup.
+        ParameterParser parameterParser = new ParameterParser(args);
+
         //initialize the metrics
         MetricsManager.get().init();
 
-        //initialize the parameter parser
-        ParameterParser parameterParser = new ParameterParser(args);
-
         System.setProperty(ConfigurationKeys.STORE_MODE, parameterParser.getStoreMode());
 
-        RpcServer rpcServer = new RpcServer(WORKING_THREADS);
-        //server host
-        rpcServer.setHost(parameterParser.getHost());
-        //server port
-        rpcServer.setListenPort(parameterParser.getPort());
-        UUIDGenerator.init(parameterParser.getServerNode());
-        //log store mode : file、db
-        SessionHolder.init(parameterParser.getStoreMode());
+        ThreadPoolExecutor workingThreads = new ThreadPoolExecutor(NettyServerConfig.getMinServerPoolSize(),
+                NettyServerConfig.getMaxServerPoolSize(), NettyServerConfig.getKeepAliveTime(), TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(NettyServerConfig.getMaxTaskQueueSize()),
+                new NamedThreadFactory("ServerHandlerThread", NettyServerConfig.getMaxServerPoolSize()), new ThreadPoolExecutor.CallerRunsPolicy());
 
-        DefaultCoordinator coordinator = new DefaultCoordinator(rpcServer);
+        NettyRemotingServer nettyRemotingServer = new NettyRemotingServer(workingThreads);
+        UUIDGenerator.init(parameterParser.getServerNode());
+        //log store mode : file, db, redis
+        SessionHolder.init(parameterParser.getSessionStoreMode());
+        LockerManagerFactory.init(parameterParser.getLockStoreMode());
+        DefaultCoordinator coordinator = DefaultCoordinator.getInstance(nettyRemotingServer);
         coordinator.init();
-        rpcServer.setHandler(coordinator);
-        // register ShutdownHook
-        ShutdownHook.getInstance().addDisposable(coordinator);
+        nettyRemotingServer.setHandler(coordinator);
+
+        // let ServerRunner do destroy instead ShutdownHook, see https://github.com/seata/seata/issues/4028
+        ServerRunner.addDisposable(coordinator);
 
         //127.0.0.1 and 0.0.0.0 are not valid here.
         if (NetUtil.isValidIp(parameterParser.getHost(), false)) {
             XID.setIpAddress(parameterParser.getHost());
         } else {
-            XID.setIpAddress(NetUtil.getLocalIp());
+            String preferredNetworks = ConfigurationFactory.getInstance().getConfig(REGISTRY_PREFERED_NETWORKS);
+            if (StringUtils.isNotBlank(preferredNetworks)) {
+                XID.setIpAddress(NetUtil.getLocalIp(preferredNetworks.split(REGEX_SPLIT_CHAR)));
+            } else {
+                XID.setIpAddress(NetUtil.getLocalIp());
+            }
         }
-        XID.setPort(rpcServer.getListenPort());
-
-        rpcServer.init();
-
-        System.exit(0);
+        nettyRemotingServer.init();
     }
 }

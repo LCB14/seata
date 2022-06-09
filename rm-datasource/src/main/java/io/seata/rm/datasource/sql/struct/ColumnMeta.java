@@ -37,10 +37,11 @@ public class ColumnMeta {
     private String columnDef;
     private int sqlDataType;
     private int sqlDatetimeSub;
-    private int charOctetLength;
+    private Object charOctetLength;
     private int ordinalPosition;
     private String isNullAble;
     private String isAutoincrement;
+    private boolean isOnUpdate;
 
     /**
      * Instantiates a new Column meta.
@@ -69,6 +70,7 @@ public class ColumnMeta {
                 ", ordinalPosition=" + ordinalPosition +
                 ", isNullAble='" + isNullAble + '\'' +
                 ", isAutoincrement='" + isAutoincrement + '\'' +
+                ", isOnUpdate=" + isOnUpdate +
                 '}';
     }
 
@@ -109,12 +111,30 @@ public class ColumnMeta {
     }
 
     /**
+     * Gets table schema name
+     *
+     * @return table schema name
+     */
+    protected String getTableSchemaName() {
+        return tableSchemaName;
+    }
+
+    /**
      * Sets table name.
      *
      * @param tableName the table name
      */
     public void setTableName(String tableName) {
         this.tableName = tableName;
+    }
+
+    /**
+     * Gets table name
+     *
+     * @return table name
+     */
+    protected String getTableName() {
+        return tableName;
     }
 
     /**
@@ -320,7 +340,7 @@ public class ColumnMeta {
      *
      * @return the char octet length
      */
-    public int getCharOctetLength() {
+    public Object getCharOctetLength() {
         return charOctetLength;
     }
 
@@ -329,7 +349,7 @@ public class ColumnMeta {
      *
      * @param charOctetLength the char octet length
      */
-    public void setCharOctetLength(int charOctetLength) {
+    public void setCharOctetLength(Object charOctetLength) {
         this.charOctetLength = charOctetLength;
     }
 
@@ -385,6 +405,14 @@ public class ColumnMeta {
      */
     public void setIsAutoincrement(String isAutoincrement) {
         this.isAutoincrement = isAutoincrement;
+    }
+
+    public boolean isOnUpdate() {
+        return isOnUpdate;
+    }
+
+    public void setOnUpdate(boolean onUpdate) {
+        isOnUpdate = onUpdate;
     }
 
     @Override
@@ -450,6 +478,9 @@ public class ColumnMeta {
         if (!Objects.equals(columnMeta.isAutoincrement, this.isAutoincrement)) {
             return false;
         }
+        if (!Objects.equals(columnMeta.isOnUpdate, this.isOnUpdate)) {
+            return false;
+        }
         return true;
     }
 
@@ -473,6 +504,7 @@ public class ColumnMeta {
         hash += Objects.hashCode(ordinalPosition);
         hash += Objects.hashCode(isNullAble);
         hash += Objects.hashCode(isAutoincrement);
+        hash += Objects.hashCode(isOnUpdate);
         return hash;
     }
 }

@@ -15,24 +15,19 @@
  */
 package io.seata.discovery.registry;
 
+import java.util.Objects;
+
 import io.seata.common.exception.NotSupportYetException;
 import io.seata.common.loader.EnhancedServiceLoader;
 import io.seata.config.ConfigurationFactory;
 import io.seata.config.ConfigurationKeys;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.Objects;
-
 /**
  * The type Registry factory.
  *
- * @author jimin.jm @alibaba-inc.com
- * @date 2019 /2/1
+ * @author slievrly
  */
 public class RegistryFactory {
-    private static final Logger LOGGER = LoggerFactory.getLogger(RegistryFactory.class);
 
     /**
      * Gets instance.
@@ -40,6 +35,10 @@ public class RegistryFactory {
      * @return the instance
      */
     public static RegistryService getInstance() {
+        return RegistryFactoryHolder.INSTANCE;
+    }
+
+    private static RegistryService buildRegistryService() {
         RegistryType registryType;
         String registryTypeName = ConfigurationFactory.CURRENT_FILE_INSTANCE.getConfig(
             ConfigurationKeys.FILE_ROOT_REGISTRY + ConfigurationKeys.FILE_CONFIG_SPLIT_CHAR
@@ -49,10 +48,11 @@ public class RegistryFactory {
         } catch (Exception exx) {
             throw new NotSupportYetException("not support registry type: " + registryTypeName);
         }
-        if (RegistryType.File == registryType) {
-            return FileRegistryServiceImpl.getInstance();
-        } else {
-            return EnhancedServiceLoader.load(RegistryProvider.class, Objects.requireNonNull(registryType).name()).provide();
-        }
+        return EnhancedServiceLoader.load(RegistryProvider.class, Objects.requireNonNull(registryType).name()).provide();
+
+    }
+
+    private static class RegistryFactoryHolder {
+        private static final RegistryService INSTANCE = buildRegistryService();
     }
 }
