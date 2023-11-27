@@ -15,6 +15,7 @@
  */
 package io.seata.config;
 
+import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -24,8 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import io.seata.common.util.CollectionUtils;
 import io.seata.common.util.DurationUtil;
 import io.seata.common.util.StringUtils;
-import net.sf.cglib.proxy.Enhancer;
-import net.sf.cglib.proxy.MethodInterceptor;
 
 /**
  * @author funkye
@@ -36,7 +35,7 @@ public class ConfigurationCache implements ConfigurationChangeListener {
 
     private static final String METHOD_LATEST_CONFIG = METHOD_PREFIX + "LatestConfig";
 
-    private static final ConcurrentHashMap<String, ObjectWrapper> CONFIG_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, ObjectWrapper> CONFIG_CACHE = new ConcurrentHashMap<>();
 
     private Map<String, HashSet<ConfigurationChangeListener>> configListenersMap = new HashMap<>();
 
@@ -100,19 +99,22 @@ public class ConfigurationCache implements ConfigurationChangeListener {
         }
     }
 
-    public Configuration proxy(Configuration originalConfiguration) {
-        return (Configuration)Enhancer.create(Configuration.class,
-            (MethodInterceptor)(proxy, method, args, methodProxy) -> {
-                if (method.getName().startsWith(METHOD_PREFIX)
-                        && !method.getName().equalsIgnoreCase(METHOD_LATEST_CONFIG)) {
+    public Configuration proxy(Configuration originalConfiguration) throws Exception {
+        return (Configuration)Proxy.newProxyInstance(this.getClass().getClassLoader(), new Class[]{Configuration.class}
+            , (proxy, method, args) -> {
+                String methodName = method.getName();
+                if (methodName.startsWith(METHOD_PREFIX) && !methodName.equalsIgnoreCase(METHOD_LATEST_CONFIG)) {
                     String rawDataId = (String)args[0];
                     ObjectWrapper wrapper = CONFIG_CACHE.get(rawDataId);
-                    ObjectWrapper.ConfigType type = ObjectWrapper.getTypeByName(method.getName().substring(METHOD_PREFIX.length()));
+                    ObjectWrapper.ConfigType type =
+                        ObjectWrapper.getTypeByName(methodName.substring(METHOD_PREFIX.length()));
                     Object defaultValue = null;
-                    if (args.length > 1 && method.getParameterTypes()[1].getSimpleName().equalsIgnoreCase(type.name())) {
+                    if (args.length > 1
+                            && method.getParameterTypes()[1].getSimpleName().equalsIgnoreCase(type.name())) {
                         defaultValue = args[1];
                     }
-                    if (null == wrapper || (null != defaultValue && !Objects.equals(defaultValue, wrapper.lastDefaultValue))) {
+                    if (null == wrapper
+                            || (null != defaultValue && !Objects.equals(defaultValue, wrapper.lastDefaultValue))) {
                         Object result = method.invoke(originalConfiguration, args);
                         // The wrapper.data only exists in the cache when it is not null.
                         if (result != null) {
@@ -123,7 +125,8 @@ public class ConfigurationCache implements ConfigurationChangeListener {
                     return wrapper == null ? null : wrapper.convertData(type);
                 }
                 return method.invoke(originalConfiguration, args);
-            });
+            }
+        );
     }
 
     private static class ConfigurationCacheInstance {
@@ -244,7 +247,8 @@ public class ConfigurationCache implements ConfigurationChangeListener {
             }
 
             public static ConfigType fromCode(String code) {
-                return CODE_TO_VALUE.get(code.toUpperCase());
+                ConfigType configType = CODE_TO_VALUE.get(code.toUpperCase());
+                return configType == null ? ConfigType.STRING : configType;
             }
 
             public static ConfigType fromName(String name) {

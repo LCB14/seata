@@ -20,6 +20,7 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.RowIdLifetime;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -724,8 +725,17 @@ public class MockDatabaseMetaData implements DatabaseMetaData {
     @Override
     public ResultSet getColumns(String catalog, String schemaPattern, String tableNamePattern, String columnNamePattern)
         throws SQLException {
-        return new MockResultSet((MockStatementBase)this.connection.createStatement())
-                .mockResultSet(columnMetaColumnLabels, columnsMetasReturnValue);
+        List<Object[]> metas = new ArrayList<>();
+        for (Object[] meta : columnsMetasReturnValue) {
+            if (tableNamePattern.equals(meta[2].toString())) {
+                metas.add(meta);
+            }
+        }
+        if(metas.isEmpty()){
+            metas = Arrays.asList(columnsMetasReturnValue);
+        }
+        return new MockResultSet(this.connection.createStatement())
+            .mockResultSet(columnMetaColumnLabels, metas.toArray(new Object[0][]));
     }
 
     @Override
@@ -781,7 +791,7 @@ public class MockDatabaseMetaData implements DatabaseMetaData {
     @Override
     public ResultSet getIndexInfo(String catalog, String schema, String table, boolean unique, boolean approximate)
         throws SQLException {
-        return new MockResultSet((MockStatementBase)this.connection.createStatement())
+        return new MockResultSet(this.connection.createStatement())
                 .mockResultSet(indexMetaColumnLabels, indexMetasReturnValue);
     }
 
@@ -853,7 +863,7 @@ public class MockDatabaseMetaData implements DatabaseMetaData {
 
     @Override
     public Connection getConnection() throws SQLException {
-        return null;
+        return connection;
     }
 
     @Override

@@ -25,7 +25,7 @@ import io.seata.common.exception.NotSupportYetException;
 /**
  * db page util
  *
- * @author: lvekee 734843455@qq.com
+ * @author lvekee 734843455@qq.com
  */
 public class PageUtil {
     /**
@@ -78,8 +78,8 @@ public class PageUtil {
     /**
      * check page parm
      *
-     * @param pageNum
-     * @param pageSize
+     * @param pageNum the page num
+     * @param pageSize the page size
      */
     public static void checkParam(int pageNum, int pageSize) {
         if (!(pageNum >= MIN_PAGE_NUM && pageNum <= MAX_PAGE_NUM)) {
@@ -93,18 +93,20 @@ public class PageUtil {
     /**
      * get pagesql
      *
-     * @param sourceSql
-     * @param dbType
-     * @param pageNum
-     * @param pageSize
-     * @return
+     * @param sourceSql the source sql
+     * @param dbType the db type
+     * @param pageNum the page num
+     * @param pageSize the page size
+     * @return the page sql
      */
     public static String pageSql(String sourceSql, String dbType, int pageNum, int pageSize) {
         switch (dbType) {
             case "mysql":
+            case "polardb-x":
             case "h2":
             case "postgresql":
             case "oceanbase":
+            case "dm":
                 return LIMIT_TEMPLATE.replace(SOURCE_SQL_PLACE_HOLD, sourceSql)
                         .replace(LIMIT_PLACE_HOLD, String.valueOf(pageSize))
                         .replace(OFFSET_PLACE_HOLD, String.valueOf((pageNum - 1) * pageSize));
@@ -120,17 +122,23 @@ public class PageUtil {
     /**
      * get countsql
      *
-     * @param sourceSql
-     * @param dbType
-     * @return
+     * @param sourceSql the source sql
+     * @param dbType the db type
+     * @return the count sql
      */
     public static String countSql(String sourceSql, String dbType) {
         switch (dbType) {
             case "mysql":
             case "h2":
-            case "postgresql":
             case "oceanbase":
             case "oracle":
+            case "dm":
+                return sourceSql.replaceAll("(?i)(?<=select)(.*)(?=from)", " count(1) ");
+            case "postgresql":
+                int lastIndexOfOrderBy = sourceSql.toLowerCase().lastIndexOf("order by");
+                if (lastIndexOfOrderBy != -1) {
+                    return sourceSql.substring(0, lastIndexOfOrderBy).replaceAll("(?i)(?<=select)(.*)(?=from)", " count(1) ");
+                }
                 return sourceSql.replaceAll("(?i)(?<=select)(.*)(?=from)", " count(1) ");
             default:
                 throw new NotSupportYetException("PageUtil not support this dbType:" + dbType);
@@ -139,9 +147,9 @@ public class PageUtil {
 
     /**
      * set sqlParamList in preparedStatement
-     * @param ps
-     * @param sqlParamList
-     * @throws SQLException
+     * @param ps the prepared statement
+     * @param sqlParamList the sql param list
+     * @throws SQLException the sql exception
      */
     public static void setObject(PreparedStatement ps, List<Object> sqlParamList) throws SQLException {
         for (int i = 0; i < sqlParamList.size(); i++) {

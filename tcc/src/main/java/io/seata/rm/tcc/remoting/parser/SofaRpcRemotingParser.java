@@ -50,10 +50,10 @@ public class SofaRpcRemotingParser extends AbstractedRemotingParser {
         try {
             RemotingDesc serviceBeanDesc = new RemotingDesc();
             Class<?> interfaceClass = (Class<?>)ReflectionUtil.invokeMethod(bean, "getInterfaceClass");
-            String interfaceClassName = (String)ReflectionUtil.getFieldValue(bean, "interfaceType");
-            String uniqueId = (String)ReflectionUtil.getFieldValue(bean, "uniqueId");
-            serviceBeanDesc.setInterfaceClass(interfaceClass);
-            serviceBeanDesc.setInterfaceClassName(interfaceClassName);
+            String interfaceClassName = ReflectionUtil.getFieldValue(bean, "interfaceType");
+            String uniqueId = ReflectionUtil.getFieldValue(bean, "uniqueId");
+            serviceBeanDesc.setServiceClass(interfaceClass);
+            serviceBeanDesc.setServiceClassName(interfaceClassName);
             serviceBeanDesc.setUniqueId(uniqueId);
             serviceBeanDesc.setProtocol(Protocols.SOFA_RPC);
             if (isService(bean, beanName)) {

@@ -22,7 +22,6 @@ import java.util.concurrent.TimeUnit;
 
 import io.seata.common.XID;
 import io.seata.common.util.NetUtil;
-import io.seata.core.constants.ConfigurationKeys;
 import io.seata.core.rpc.ShutdownHook;
 import io.seata.core.rpc.netty.NettyRemotingServer;
 import io.seata.server.ParameterParser;
@@ -45,24 +44,21 @@ public abstract class AbstractServerTest {
 
     protected static void startSeataServer() throws InterruptedException {
         (new Thread(new Runnable() {
-            @Override
             public void run() {
                 File file = new File("sessionStore/root.data");
                 if(file.exists()){
                     file.delete();
                 }
 
-                ParameterParser parameterParser = new ParameterParser(new String[]{});
+                ParameterParser parameterParser = new ParameterParser();
 
                 //initialize the metrics
                 MetricsManager.get().init();
 
-                System.setProperty(ConfigurationKeys.STORE_MODE, parameterParser.getStoreMode());
-
                 nettyServer = new NettyRemotingServer(workingThreads);
                 UUIDGenerator.init(parameterParser.getServerNode());
                 //log store mode : file、db
-                SessionHolder.init(parameterParser.getStoreMode());
+                SessionHolder.init();
 
                 DefaultCoordinator coordinator = DefaultCoordinator.getInstance(nettyServer);
                 coordinator.init();

@@ -30,6 +30,7 @@ import io.seata.server.session.BranchSession;
 import io.seata.server.session.GlobalSession;
 import io.seata.server.session.SessionHelper;
 import io.seata.server.session.SessionHolder;
+import io.seata.server.store.StoreConfig.SessionMode;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -87,7 +88,7 @@ public class SessionStoreTest {
     @Test
     public void testRestoredFromFile() throws Exception {
         try {
-            SessionHolder.init("file");
+            SessionHolder.init(SessionMode.FILE);
             GlobalSession globalSession = new GlobalSession("demo-app", DEFAULT_TX_GROUP, "test", 6000);
             String xid = XID.generateXID(globalSession.getTransactionId());
             globalSession.setXid(xid);
@@ -119,12 +120,12 @@ public class SessionStoreTest {
             Assertions.assertTrue(lockManager.isLockable(otherXID, RESOURCE_ID, "tb:3"));
 
             // Re-init SessionHolder: restore sessions from file
-            SessionHolder.init("file");
+            SessionHolder.init(SessionMode.FILE);
 
             long tid = globalSession.getTransactionId();
             GlobalSession reloadSession = SessionHolder.findGlobalSession(globalSession.getXid());
             Assertions.assertNotNull(reloadSession);
-            Assertions.assertFalse(globalSession == reloadSession);
+            Assertions.assertNotSame(globalSession, reloadSession);
             Assertions.assertEquals(globalSession.getApplicationId(), reloadSession.getApplicationId());
 
             Assertions.assertFalse(lockManager.isLockable(otherXID, RESOURCE_ID, "ta:1"));
@@ -148,14 +149,14 @@ public class SessionStoreTest {
     //@Test
     public void testRestoredFromFile2() throws Exception {
         try {
-            SessionHolder.init("file");
+            SessionHolder.init(SessionMode.FILE);
             GlobalSession globalSession = new GlobalSession("demo-app", DEFAULT_TX_GROUP, "test", 6000);
 
             globalSession.addSessionLifecycleListener(SessionHolder.getRootSessionManager());
             globalSession.begin();
 
             // Re-init SessionHolder: restore sessions from file
-            SessionHolder.init("file");
+            SessionHolder.init(SessionMode.FILE);
         } finally {
             SessionHolder.destroy();
         }
@@ -169,7 +170,7 @@ public class SessionStoreTest {
     @Test
     public void testRestoredFromFileAsyncCommitting() throws Exception {
         try {
-            SessionHolder.init("file");
+            SessionHolder.init(SessionMode.FILE);
             GlobalSession globalSession = new GlobalSession("demo-app", DEFAULT_TX_GROUP, "test", 6000);
 
             String xid = XID.generateXID(globalSession.getTransactionId());
@@ -196,7 +197,7 @@ public class SessionStoreTest {
             Assertions.assertTrue(lockManager.isLockable(otherXID, RESOURCE_ID, "ta:1"));
 
             // Re-init SessionHolder: restore sessions from file
-            SessionHolder.init("file");
+            SessionHolder.init(SessionMode.FILE);
 
             long tid = globalSession.getTransactionId();
             GlobalSession reloadSession = SessionHolder.findGlobalSession(globalSession.getXid());
@@ -204,7 +205,7 @@ public class SessionStoreTest {
 
             GlobalSession sessionInAsyncCommittingQueue = SessionHolder.getAsyncCommittingSessionManager()
                 .findGlobalSession(globalSession.getXid());
-            Assertions.assertTrue(reloadSession == sessionInAsyncCommittingQueue);
+            Assertions.assertSame(reloadSession, sessionInAsyncCommittingQueue);
 
             // No locking for session in AsyncCommitting status
             Assertions.assertTrue(lockManager.isLockable(otherXID, RESOURCE_ID, "ta:1"));
@@ -225,7 +226,7 @@ public class SessionStoreTest {
     @Test
     public void testRestoredFromFileCommitRetry() throws Exception {
         try {
-            SessionHolder.init("file");
+            SessionHolder.init(SessionMode.FILE);
             GlobalSession globalSession = new GlobalSession("demo-app", DEFAULT_TX_GROUP, "test", 6000);
 
             String xid = XID.generateXID(globalSession.getTransactionId());
@@ -254,7 +255,7 @@ public class SessionStoreTest {
             Assertions.assertTrue(lockManager.isLockable(otherXID, RESOURCE_ID, "ta:1"));
 
             // Re-init SessionHolder: restore sessions from file
-            SessionHolder.init("file");
+            SessionHolder.init(SessionMode.FILE);
 
             long tid = globalSession.getTransactionId();
             GlobalSession reloadSession = SessionHolder.findGlobalSession(globalSession.getXid());
@@ -262,7 +263,7 @@ public class SessionStoreTest {
 
             GlobalSession sessionInRetryCommittingQueue = SessionHolder.getRetryCommittingSessionManager()
                 .findGlobalSession(globalSession.getXid());
-            Assertions.assertTrue(reloadSession == sessionInRetryCommittingQueue);
+            Assertions.assertSame(reloadSession, sessionInRetryCommittingQueue);
             BranchSession reloadBranchSession = reloadSession.getBranch(branchSession1.getBranchId());
             Assertions.assertEquals(reloadBranchSession.getStatus(), BranchStatus.PhaseTwo_CommitFailed_Retryable);
 
@@ -285,7 +286,7 @@ public class SessionStoreTest {
     @Test
     public void testRestoredFromFileRollbackRetry() throws Exception {
         try {
-            SessionHolder.init("file");
+            SessionHolder.init(SessionMode.FILE);
 
             GlobalSession globalSession = new GlobalSession("demo-app", DEFAULT_TX_GROUP, "test", 6000);
 
@@ -315,7 +316,7 @@ public class SessionStoreTest {
             Assertions.assertTrue(lockManager.isLockable(otherXID, RESOURCE_ID, "ta:1"));
 
             // Re-init SessionHolder: restore sessions from file
-            SessionHolder.init("file");
+            SessionHolder.init(SessionMode.FILE);
 
             long tid = globalSession.getTransactionId();
             GlobalSession reloadSession = SessionHolder.findGlobalSession(globalSession.getXid());
@@ -323,7 +324,7 @@ public class SessionStoreTest {
 
             GlobalSession sessionInRetryRollbackingQueue = SessionHolder.getRetryRollbackingSessionManager()
                 .findGlobalSession(globalSession.getXid());
-            Assertions.assertTrue(reloadSession == sessionInRetryRollbackingQueue);
+            Assertions.assertSame(reloadSession, sessionInRetryRollbackingQueue);
             BranchSession reloadBranchSession = reloadSession.getBranch(branchSession1.getBranchId());
             Assertions.assertEquals(reloadBranchSession.getStatus(), BranchStatus.PhaseTwo_RollbackFailed_Retryable);
 
@@ -346,7 +347,7 @@ public class SessionStoreTest {
     @Test
     public void testRestoredFromFileRollbackFailed() throws Exception {
         try {
-            SessionHolder.init("file");
+            SessionHolder.init(SessionMode.FILE);
 
             GlobalSession globalSession = new GlobalSession("demo-app", DEFAULT_TX_GROUP, "test", 6000);
 
@@ -379,7 +380,7 @@ public class SessionStoreTest {
             Assertions.assertTrue(lockManager.isLockable(otherXID, RESOURCE_ID, "ta:1"));
 
             // Re-init SessionHolder: restore sessions from file
-            SessionHolder.init("file");
+            SessionHolder.init(SessionMode.FILE);
 
             long tid = globalSession.getTransactionId();
             GlobalSession reloadSession = SessionHolder.findGlobalSession(globalSession.getXid());
